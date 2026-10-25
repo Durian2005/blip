@@ -1,0 +1,22 @@
+<Project>
+
+  <!-- 全仓库共用的编译设置。单个 csproj 不要再重复声明 TargetFramework。 -->
+  <PropertyGroup>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Deterministic>true</Deterministic>
+    <InvariantGlobalization>false</InvariantGlobalization>
+
+    <Version>0.1.0</Version>
+    <Product>blip</Product>
+    <Description>Offline P2P messenger over Bluetooth LE.</Description>
+    <NeutralLanguage>en</NeutralLanguage>
+
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+</Project>

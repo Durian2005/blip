@@ -1,0 +1,53 @@
+# ---- .NET ----
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Dd]ebugPublic/
+[Rr]eleasePublic/
+artifacts/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+*.binlog
+
+# ---- Test ----
+TestResults/
+*.trx
+*.coverage
+*.coverlet.json
+coverage*.xml
+coverage*.json
+
+# ---- Publish / packaging ----
+publish/
+*.msix
+*.msixbundle
+*.appx
+*.nupkg
+
+# ---- Runtime data (never commit) ----
+*.db
+*.db-shm
+*.db-wal
+*.log
+btsnoop*.log
+
+# ---- Secrets & keys ----
+*.pfx
+*.snk
+secrets.json
+*.key
+
+# ---- OS / editor ----
+Thumbs.db
+desktop.ini
+.DS_Store
+*.swp
+
+# ---- WorkBuddy project data (contains local notes) ----
+.workbuddy/

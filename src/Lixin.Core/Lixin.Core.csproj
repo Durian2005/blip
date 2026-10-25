@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Lixin.Core —— 纯逻辑核心，零外部依赖。
+    职责：领域模型、协议帧编解码、分片/重组、IByteChannel 等接口定义。
+    约束：不得引用本仓库任何其他项目；不得依赖 Windows 专有 API（保持可单测）。
+  -->
+
+</Project>

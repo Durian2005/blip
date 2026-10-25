@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Lixin.Transport —— 通道实现层。
+    职责：IByteChannel 的具体实现（TcpLoopbackChannel / BleGattChannel / 后续的 RfcommChannel）。
+    约束：只依赖 Lixin.Core；蓝牙/WinRT 相关调用只能出现在本层。
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Lixin.Core\Lixin.Core.csproj" />
+  </ItemGroup>
+
+</Project>

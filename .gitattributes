@@ -1,0 +1,13 @@
+* text=auto eol=lf
+
+# 解决方案文件由 Visual Studio/dotnet 生成，保持 Windows 习惯格式（BOM + CRLF），不要手动改
+*.sln text eol=crlf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.zip binary
+*.exe binary
+*.dll binary

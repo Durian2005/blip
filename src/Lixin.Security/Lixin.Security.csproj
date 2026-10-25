@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Lixin.Security —— 安全层。
+    职责：身份密钥（Ed25519）、会话握手（X25519+HKDF）、AEAD 加解密、SAS 验证、重放防护。
+    约束：只依赖 Lixin.Core；不得反向依赖 Transport 或 App。
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Lixin.Core\Lixin.Core.csproj" />
+  </ItemGroup>
+
+</Project>

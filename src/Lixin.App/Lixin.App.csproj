@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Lixin.App —— WPF 宿主（界面层）。
+    职责：窗口、视图模型、本地化资源、组装各层。
+    约束：可以依赖 Core/Transport/Security；反过来不允许。
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>blip</AssemblyName>
+    <RootNamespace>Lixin.App</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Lixin.Core\Lixin.Core.csproj" />
+    <ProjectReference Include="..\Lixin.Transport\Lixin.Transport.csproj" />
+    <ProjectReference Include="..\Lixin.Security\Lixin.Security.csproj" />
+  </ItemGroup>
+
+</Project>

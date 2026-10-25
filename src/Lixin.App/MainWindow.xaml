@@ -1,0 +1,15 @@
+<Window x:Class="Lixin.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="blip" Height="600" Width="900"
+        WindowStartupLocation="CenterScreen">
+    <Grid>
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+            <TextBlock x:Name="Placeholder" Text="blip · P0 skeleton"
+                       FontSize="16" HorizontalAlignment="Center" />
+            <TextBlock Text="项目骨架已就绪，尚未实现任何功能。"
+                       FontSize="12" Opacity="0.6" Margin="0,8,0,0"
+                       HorizontalAlignment="Center" />
+        </StackPanel>
+    </Grid>
+</Window>
