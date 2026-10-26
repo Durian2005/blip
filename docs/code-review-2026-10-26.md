@@ -47,6 +47,9 @@ error CS0246: 未能找到类型或命名空间名"GattDeviceService"
 
 选 A：Core 保持 `net9.0-windows` 即可继续起到"防止 Core 误用 Windows API"的隐性护栏作用。
 
+> **实际采用的做法比 A 更彻底**（见 §九 修1）：`Lixin.Core` 直接降到纯 `net9.0`，
+> 平台 API 在核心层根本不存在，护栏从"隐性"变成"编译期硬失败"。
+
 ---
 
 ### C2 · 单帧控制帧会劫持进行中的分片消息（P3 的保活必踩）
@@ -154,7 +157,7 @@ PROBE3 空缓冲返回 0，但 IsOpen=True
 | **L2** | `_writeCount` / `_notifyCount` 用 `++` 而非 `Interlocked`，GATT 事件回调可能并发触发 |
 | **L3** | `NotifyAsync` 先 `_notifyCount++` 再统计结果，0 个客户端成功也会打印 `[TX #n]`；"暂无订阅者，跳过通知"同样计入 |
 | **L4** | `Lixin.Security` 是空项目（0 个源文件），但测试项目已引用它 |
-| **L5** | 测试项目 TFM 继承 `net9.0-windows`，Linux CI 上跑不了；**当前完全没有 CI**（无 `.github/workflows`），24 个测试只靠手动跑。另：`GenerateDocumentationFile=false` 但公共 API 全都写了 XML 注释，既不产出文档也不产生缺失警告 |
+| **L5** | 测试项目 TFM 继承 Windows 目标（原 `net9.0-windows`，修复 C1 后为 `net9.0-windows10.0.19041.0`），Linux CI 上跑不了；**当前完全没有 CI**（无 `.github/workflows`），测试只靠手动跑。另：`GenerateDocumentationFile=false` 但公共 API 全都写了 XML 注释，既不产出文档也不产生缺失警告 |
 | **L6** | 无 `.editorconfig`、无 analyzer 配置，`dotnet format` 没有基线，风格约束全靠自觉 |
 
 ---

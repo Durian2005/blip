@@ -194,7 +194,7 @@ BLE 实测吞吐仅 9–20 KB/s，传 1 MB 需要 1–2 分钟。因此：
 
 | 项 | 选型 | 理由 |
 |---|---|---|
-| 运行时 | **.NET 9**（`net9.0-windows`） | **本机已装，零安装成本**：SDK `9.0.101` + `Microsoft.WindowsDesktop.App 9.0.0`（实测确认）。.NET 8 运行时亦在（8.0.21），如需兼容可降级目标框架 |
+| 运行时 | **.NET 9**（`net9.0-windows10.0.19041.0`） | **本机已装，零安装成本**：SDK `9.0.101` + `Microsoft.WindowsDesktop.App 9.0.0`（实测确认）。.NET 8 运行时亦在（8.0.21），如需兼容可降级目标框架 |
 | UI | **WPF**（决策 D4） | WinUI 3 与 WPF 都是 .NET 桌面 UI 框架（XAML + C#），**与蓝牙逻辑完全无关，可随时替换**。选 WPF 是因为成熟稳定、自包含单文件发布简单、无需 Windows App SDK 打包；WinUI 3 视觉更新（原生 Fluent）但部署更折腾。**视觉风格按 NFR-11 走简约路线；文案走 `.resx` 做中英双语** |
 | BLE 外设 | `Windows.Devices.Bluetooth.GenericAttributeProfile.GattServiceProvider` + `GattServiceProviderAdvertisingParameters{ IsConnectable = true }` | 系统自带，Win10 1809+ 可用 |
 | BLE 中心 | `BluetoothLEDevice` + `GattSession` + `GattCharacteristic` | 系统自带 |

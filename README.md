@@ -21,7 +21,7 @@
 
 | 层 | 选型 |
 |---|---|
-| 运行时 | .NET 9（`net9.0-windows`） |
+| 运行时 | .NET 9（`net9.0-windows10.0.19041.0`） |
 | 界面 | WPF |
 | 传输 | BLE GATT（`GattServiceProvider` / `BluetoothLEDevice`） |
 | 协议 | 自定义二进制帧（非 JSON） |

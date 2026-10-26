@@ -48,7 +48,7 @@
 | T0.1 | 仓库初始化：README、LICENSE、`.gitignore`（挡 `bin/ obj/ .vs/`）、`.gitattributes`（LF）、目录骨架 | clone 下来能直接打开编译 | 0.5 |
 | T0.2 | 解决方案分层：`Lixin.Core` / `Lixin.Transport` / `Lixin.Security` / `Lixin.App` / `Lixin.Tests`——**只定项目边界与引用方向，不写实现** | 一张项目引用图 + 空项目能 `dotnet build` 通过 | 0.5 |
 
-**需要你**：已定 → License **MIT**、仓库 **Public**、`dotnet` 环境**本机已就绪**（SDK 9.0.101 + `WindowsDesktop.App 9.0.0`，目标框架用 `net9.0-windows`，**不必再装任何东西**）。
+**需要你**：已定 → License **MIT**、仓库 **Public**、`dotnet` 环境**本机已就绪**（SDK 9.0.101 + `WindowsDesktop.App 9.0.0`，目标框架用 `net9.0-windows10.0.19041.0`，**不必再装任何东西**）。
 
 ---
 
@@ -128,7 +128,7 @@ BLE 是「中心 ↔ 外设」的固定拓扑，而"验证电脑能不能当外�
 
 | ID | 缺陷 | 修复 | 验证 |
 |---|---|---|---|
-| 修1 | **C1** `Lixin.Transport` 的 TFM 是 `net9.0-windows`，没有 WinRT 投影，`using Windows.Devices.Bluetooth;` 直接 CS0246 | 全仓库 TFM 抬到 `net9.0-windows10.0.19041.0`；`Lixin.Core` 反向降到纯 `net9.0`（顺带得到「Core 误用平台 API 必然编译失败」的硬护栏） | 探针类引用 `BluetoothLEDevice` / `GattDeviceService` 编译通过 |
+| 修1 | **C1** `Lixin.Transport` 的 TFM 是 `net9.0-windows10.0.19041.0`，没有 WinRT 投影，`using Windows.Devices.Bluetooth;` 直接 CS0246 | 全仓库 TFM 抬到 `net9.0-windows10.0.19041.0`；`Lixin.Core` 反向降到纯 `net9.0`（顺带得到「Core 误用平台 API 必然编译失败」的硬护栏） | 探针类引用 `BluetoothLEDevice` / `GattDeviceService` 编译通过 |
 | 修2 | **C2** 单帧控制帧劫持正文：300 B 被截成 104 B + 100 B，静默丢 96 B | `FrameTypes.IsFragmented` 登记可分片类型，控制帧**旁路**重组器；控制帧用**独立序号空间** | `SingleFrameControlMessage_DoesNotHijackInFlightText` 等 3 条 |
 | 修3 | **C3** 序号断裂后残余分片被当新消息，截断内容以 `Completed` 交付 | 引入**毒化**状态：损坏后丢弃后续帧直到下一个末片；`Reset()` 清除 | `LostMiddleFragment_...`、`LostLastFragment_...` 等 4 条 |
 | 修4 | **H1** 空读缓冲返回 0，与「0 = 对端已关闭」契约冲突 | 空缓冲抛 `ArgumentException`；接口注释补明「单读者」 | `EmptyReadBuffer_ThrowsInsteadOfSignallingEof` |
@@ -261,7 +261,7 @@ P0 ──▶ P1a ═G1a═▶ P2 ──▶ P3 ═G2═▶ P4 ═G3═▶ P6 ═G
 | # | 阶段 | 事项 | 状态 |
 |---|---|---|---|
 | 1 | P0 | License / 仓库可见性 | ✅ **已定：MIT + Public** |
-| 2 | P0 | .NET 环境 | ✅ **已查：SDK 9.0.101 + WindowsDesktop 9.0.0，用 `net9.0-windows`，零安装** |
+| 2 | P0 | .NET 环境 | ✅ **已查：SDK 9.0.101 + WindowsDesktop 9.0.0，用 `net9.0-windows10.0.19041.0`，零安装** |
 | 3 | **P1a** | iPhone XS Max 装 **nRF Connect**（免费，iOS 16+，双角色均支持） | ✅ **方案已定，开工前装好即可** |
 | 4 | P1a | 关 WiFi 排除 2.4 GHz 干扰、按提示操作 | P1a 期间 |
 | 5 | P1b | **借一台 Windows 电脑 2 小时**（绿色 exe，免安装） | 有空就跑，最晚不越过 G4 |
