@@ -16,8 +16,10 @@ namespace Lixin.BleProbe;
 /// </summary>
 internal static class Program
 {
-    // 自定义 128 位 UUID，避开蓝牙 SIG 保留的 16 位段，免得被 App 按标准服务解析
-    private static readonly Guid ServiceUuid = new("6a1b7c00-5d2e-4f38-9a41-0c7e3b9d5f01");
+    // 自定义 128 位 UUID，避开蓝牙 SIG 保留的 16 位段，免得被 App 按标准服务解析。
+    // ServiceUuid 末字节可用 --variant 改写：iOS 会缓存对端的 GATT 表，
+    // 换 UUID 是绕过缓存、判断「到底是缓存还是发布」的最快办法。
+    private static Guid ServiceUuid = new("6a1b7c00-5d2e-4f38-9a41-0c7e3b9d5f01");
     private static readonly Guid TxUuid = new("6a1b7c01-5d2e-4f38-9a41-0c7e3b9d5f01");
     private static readonly Guid RxUuid = new("6a1b7c02-5d2e-4f38-9a41-0c7e3b9d5f01");
 
@@ -30,6 +32,15 @@ internal static class Program
         try { Console.OutputEncoding = Encoding.UTF8; } catch { /* 某些终端不支持，忽略 */ }
 
         var probeOnly = args.Any(a => a is "--probe" or "-p");
+
+        // --variant xx：只改 Service UUID 的最后一个字节，用来绕过 iOS 的 GATT 缓存
+        var variantIndex = Array.IndexOf(args, "--variant");
+        if (variantIndex >= 0 && variantIndex + 1 < args.Length)
+        {
+            var variant = args[variantIndex + 1].PadLeft(2, '0');
+            ServiceUuid = new Guid($"6a1b7c00-5d2e-4f38-9a41-0c7e3b9d5f{variant}");
+        }
+
         int? waitSeconds = null;
         var waitIndex = Array.IndexOf(args, "--wait");
         if (waitIndex >= 0 && waitIndex + 1 < args.Length && int.TryParse(args[waitIndex + 1], out var seconds))
@@ -65,6 +76,7 @@ internal static class Program
         }
 
         Log("---------- 1. 适配器能力 ----------");
+        Log($"本机计算机名        : {Environment.MachineName}（广播里显示的名字大概率就是它）");
         Log($"MAC 地址            : {FormatMac(adapter.BluetoothAddress)}");
         Log($"经典蓝牙(BR/EDR)    : {(adapter.IsClassicSupported ? "支持" : "不支持")}");
         Log($"低功耗(BLE)         : {(adapter.IsLowEnergySupported ? "支持" : "不支持")}");
@@ -117,7 +129,7 @@ internal static class Program
             UserDescription = "blip TX - phone writes here",
             ReadProtectionLevel = GattProtectionLevel.Plain,
             WriteProtectionLevel = GattProtectionLevel.Plain,
-            StaticValue = ToBuffer(Encoding.UTF8.GetBytes("blip-p1a")),
+            // 不用 StaticValue：改由 ReadRequested 里显式回应，这样每次被读都能留下日志
         };
         var txResult = await provider.Service.CreateCharacteristicAsync(TxUuid, txParams);
         if (txResult.Error != BluetoothError.Success)
@@ -128,10 +140,11 @@ internal static class Program
         var tx = txResult.Characteristic;
         Log($"TX 特征值（写）     : {TxUuid}");
 
-        // RX：本机通知手机
+        // RX：本机通知手机。同时给 Read，因为部分平台的枚举对「全无读权限」的特征值表现异常
         var rxParams = new GattLocalCharacteristicParameters
         {
-            CharacteristicProperties = GattCharacteristicProperties.Notify,
+            CharacteristicProperties = GattCharacteristicProperties.Notify
+                                     | GattCharacteristicProperties.Read,
             UserDescription = "blip RX - server notifies here",
             ReadProtectionLevel = GattProtectionLevel.Plain,
         };
@@ -144,7 +157,40 @@ internal static class Program
         var rx = rxResult.Characteristic;
         Log($"RX 特征值（通知）   : {RxUuid}");
 
+        // 把「实际发布了什么」打出来，避免手机端看不到时无从判断
+        Log("---------- 3.1 已发布到 GATT 数据库的内容 ----------");
+        Log($"特征值总数          : {provider.Service.Characteristics.Count}（应为 2）");
+        foreach (var characteristic in provider.Service.Characteristics)
+        {
+            Log($"  · {characteristic.Uuid}  [{characteristic.CharacteristicProperties}]");
+        }
+
+        // 客户端连上/断开时要有信号，否则无法区分「没连上」和「连上但没订阅」。
+        // GattLocalService 没有 Session 属性（那是客户端 GattDeviceService 的），
+        // 因此改用「读取事件」作为连接证据：iOS 展开特征值时会主动读一次。
+
         // ---------- 4. 事件 ----------
+        // 读取事件 = 「手机已经连上并且能看到这个服务」的可靠证据
+        tx.ReadRequested += async (_, readArgs) =>
+        {
+            var deferral = readArgs.GetDeferral();
+            try
+            {
+                var request = await readArgs.GetRequestAsync();
+                if (request is null) return;
+                Log("★ 有客户端读取 TX —— 已连上且服务可见（这一步通了，说明 GATT 没问题）");
+                request.RespondWithValue(ToBuffer(Encoding.UTF8.GetBytes("blip-p1a")));
+            }
+            catch (Exception ex)
+            {
+                Log($"读事件处理异常：{ex.GetType().Name}: {ex.Message}");
+            }
+            finally
+            {
+                deferral.Complete();
+            }
+        };
+
         tx.WriteRequested += async (_, writeArgs) =>
         {
             var deferral = writeArgs.GetDeferral();
@@ -174,6 +220,26 @@ internal static class Program
             catch (Exception ex)
             {
                 Log($"写事件处理异常：{ex.GetType().Name}: {ex.Message}");
+            }
+            finally
+            {
+                deferral.Complete();
+            }
+        };
+
+        rx.ReadRequested += async (_, readArgs) =>
+        {
+            var deferral = readArgs.GetDeferral();
+            try
+            {
+                var request = await readArgs.GetRequestAsync();
+                if (request is null) return;
+                Log("★ 有客户端读取 RX —— 已连上且服务可见");
+                request.RespondWithValue(ToBuffer(Encoding.UTF8.GetBytes("blip-p1a-rx")));
+            }
+            catch (Exception ex)
+            {
+                Log($"RX 读事件异常：{ex.GetType().Name}: {ex.Message}");
             }
             finally
             {

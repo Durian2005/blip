@@ -396,3 +396,45 @@ iOS **完全没有经典蓝牙 socket**（仅 MFi），只能 BLE；macOS 的 IO
 
 **推荐**：仓库名 `blip`，description 写 `Offline P2P messenger over Bluetooth LE — no network, no server, no account.`，Topics 建议 `bluetooth-le` `ble` `p2p` `offline-first` `windows` `csharp` `wpf` `e2ee`。
 若你更希望"名字即产品名"，退一步用 `hush`（`blip` 的好处是可读性，`hush` 的好处是气质）；两者都比 `lixin` 更适合公开仓库。
+
+---
+
+## 13. 附录 C · 实测数据（P1a）
+
+> 测试日期 2026-10-26 ｜ 工具：`tools/Lixin.BleProbe`（未打包的普通 exe）｜ 对端：iPhone XS Max / iOS 17.5.1 / nRF Connect
+
+### 13.1 适配器能力（`BluetoothAdapter` 静态读取）
+
+| 项目 | 结果 |
+|---|---|
+| 适配器 | Intel Wireless Bluetooth（双模组合模块） |
+| 经典蓝牙 BR/EDR | 支持 |
+| 低功耗 BLE | 支持 |
+| 中心角色 Central | 支持 |
+| **外设角色 Peripheral** | **支持** ★ |
+| 广播卸载 offload | 支持 |
+| Radio 状态 | On |
+
+### 13.2 服务端发布
+
+| 项目 | 结果 |
+|---|---|
+| GATT 服务创建 | 成功 |
+| 已发布特征值 | 2 条（TX `[Read, WriteWithoutResponse, Write]`、RX `[Read, Notify]`） |
+| 可连接广播启动 | **Started**（状态序列 Aborted → Started，属正常） |
+| 进程身份 | **未打包的普通 exe**，无 MSIX、无管理员权限 → 绿色版方案可行 |
+
+### 13.3 端到端双向通信（iPhone 作中心）
+
+| 方向 | 动作 | 结果 |
+|---|---|---|
+| 手机 → 电脑 | 写 5 字节 `hello` | ✅ 收到，`hex=68656C6C6F`，文本还原正确 |
+| 订阅 | 手机启用 RX 通知 | ✅ `已有 1 个客户端订阅通知` |
+| 电脑 → 手机 | 通知 13 字节 `PING HH:mm:ss` | ✅ `1/1 个客户端成功`，每 5 秒持续成功 4 次以上 |
+
+### 13.4 结论
+
+- **R1（Windows 无法承担 BLE 外设角色）→ 风险关闭**，实测外设角色成立、广播可连接、双向数据通。
+- **G1a 核心达成**：电脑作为外设 + 双向通信在本机成立。
+- 过程中排除过一次误判：iPhone 首次看到服务但「无特征值」，实为 `CONNECTED SERVICES` 列表按 UUID 排序（`1800→1801→180A→184C→6A1B7C00`），我们的服务排在后面需下滑，**并非 iOS 缓存或发布失败**。
+- **仍未测量**：MTU 协商值、吞吐（KB/s）、双 Windows 端到端（G1b）。
