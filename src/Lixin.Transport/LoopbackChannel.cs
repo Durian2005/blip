@@ -88,9 +88,11 @@ public sealed class LoopbackChannel : IByteChannel
     /// <inheritdoc />
     public async ValueTask<int> ReceiveAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
     {
+        // 契约里 0 专门表示「对端已关闭」，所以空缓冲必须报错而不是返回 0，
+        // 否则上层会把「调用方传了个空数组」误判成断线。
         if (buffer.IsEmpty)
         {
-            return 0;
+            throw new ArgumentException("读缓冲不能为空：返回 0 在本接口中表示对端已关闭。", nameof(buffer));
         }
 
         while (true)

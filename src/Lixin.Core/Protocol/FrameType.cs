@@ -40,3 +40,21 @@ public enum FrameFlags : byte
     /// <summary>这是同一条逻辑消息的最后一个分片。</summary>
     LastFragment = 1 << 0,
 }
+
+/// <summary>
+/// 帧类型的传输语义分类。
+/// 这条分类决定一个帧要不要进分片重组器，是协议层面的规则，不属于任何一方的实现细节。
+/// </summary>
+public static class FrameTypes
+{
+    /// <summary>
+    /// 是否属于「可分片的数据消息」。
+    ///
+    /// - 返回 <c>true</c>：走 <see cref="MessageAssembler"/> 组装，其序号必须在同一条消息内连续。
+    /// - 返回 <c>false</c>：按**单帧控制帧**处理，直接交付，不参与重组，
+    ///   也**不占用数据帧的序号空间**（否则会在正文中间插出一个序号空洞，把正文判成断裂）。
+    ///
+    /// ★ 新增帧类型时必须在此登记。默认归为控制帧，宁可被立即交付，也不要被误当成正文的分片。
+    /// </summary>
+    public static bool IsFragmented(FrameType type) => type is FrameType.Text;
+}

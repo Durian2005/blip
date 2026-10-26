@@ -17,6 +17,11 @@ public interface IByteChannel : IAsyncDisposable
     /// 读取数据到 <paramref name="buffer"/>，返回实际读到的字节数。
     /// 返回 0 表示对端已关闭，不会再有任何数据。
     /// </summary>
+    /// <remarks>
+    /// **同一时刻只允许一个读者**（与 <see cref="System.IO.Stream"/> 一致）。
+    /// <paramref name="buffer"/> 为空抛 <see cref="ArgumentException"/>——0 在本接口中专指对端关闭，
+    /// 不能与「没读到东西」混用。
+    /// </remarks>
     ValueTask<int> ReceiveAsync(Memory<byte> buffer, CancellationToken cancellationToken = default);
 
     /// <summary>发送一段数据。允许并发调用，顺序由实现保证。</summary>
