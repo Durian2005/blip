@@ -2,14 +2,12 @@
 
   <!--
     Lixin.BleProbe —— P1a 能力验证工具（不是产品代码，不会打进发布包）。
-
-    单独覆盖 TargetFramework 为带 Windows SDK 版本的目标，才能拿到 WinRT 投影
-    （Windows.Devices.Bluetooth.* / GenericAttributeProfile.*）。
-    其余项目不需要 WinRT，保持 net9.0-windows 即可。
+    TFM 从 Directory.Build.props 继承（net9.0-windows10.0.19041.0），
+    自带 WinRT 投影，因此 Windows.Devices.Bluetooth.* / GenericAttributeProfile.* 可用。
+    这里不再重复声明，避免和全仓库默认值漂移。
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net9.0-windows10.0.19041.0</TargetFramework>
     <AssemblyName>BleProbe</AssemblyName>
     <RootNamespace>Lixin.BleProbe</RootNamespace>
   </PropertyGroup>

@@ -2,7 +2,12 @@
 
   <!-- 全仓库共用的编译设置。单个 csproj 不要再重复声明 TargetFramework。 -->
   <PropertyGroup>
-    <TargetFramework>net9.0-windows</TargetFramework>
+    <!--
+      必须带 Windows SDK 版本号，否则没有 WinRT 投影，
+      Lixin.Transport 里一行 `using Windows.Devices.Bluetooth;` 都编译不过（CS0246）。
+      Lixin.Core 例外：它在自己的 csproj 里降到纯 net9.0，用来保证核心不碰任何平台 API。
+    -->
+    <TargetFramework>net9.0-windows10.0.19041.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

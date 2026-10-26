@@ -2,8 +2,12 @@
 
   <!--
     Lixin.Transport —— 通道实现层。
-    职责：IByteChannel 的具体实现（TcpLoopbackChannel / BleGattChannel / 后续的 RfcommChannel）。
+    职责：IByteChannel 的具体实现（LoopbackChannel / BleGattChannel / 后续的 RfcommChannel）。
     约束：只依赖 Lixin.Core；蓝牙/WinRT 相关调用只能出现在本层。
+
+    TFM 继承全仓库默认值（net9.0-windows10.0.19041.0），因此 **WinRT 蓝牙投影在此可用**。
+    注意：若把这里的 TFM 改回不带 SDK 版本的 net9.0-windows，
+    `using Windows.Devices.Bluetooth;` 会立刻 CS0246 —— 这是踩过的坑。
   -->
   <ItemGroup>
     <ProjectReference Include="..\Lixin.Core\Lixin.Core.csproj" />
