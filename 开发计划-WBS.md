@@ -14,7 +14,8 @@
 | **P0** | 项目基线 ✅ **已完成** | 1 | 可编译的空骨架 + 仓库规范 | — |
 | **P1a** | 能力验证·单机可做 | 2.5 | 电脑作外设/作中心两侧各跑通（手机当对端）+ 实测数据 | **G1a** |
 | **P1b** | 能力验证·必须双机 | 1 | 两台 Windows 之间端到端跑通 | **G1b（最终 Go/No-Go）** |
-| **P2** | 传输骨架 ✅ **已完成** | 4 | `IByteChannel` + 帧层 + 分片 + 单机自聊跑通（24 测试全绿） | 单测全绿 ✅ |
+| **P2** | 传输骨架 ✅ **已完成** | 4 | `IByteChannel` + 帧层 + 分片 + 单机自聊跑通 | 单测全绿 ✅ |
+| **P2.5** | 审查缺陷修复 ✅ **已完成** | 0.5 | C1 TFM 打通 WinRT、C2 控制帧旁路、C3 毒化、H1 空缓冲契约；测试 24→32 | 回归测试全绿 ✅ |
 | **P3** | 真实通道 | 5 | 自动建连、角色选举、重连 | **G2** |
 | **P4** | 安全层 | 5 | E2EE + SAS 验证，抓包无明文 | **G3** |
 | **P5** | 产品化 UI | 6 | WPF 界面（中英双语/简约）+ 历史 + 待发队列 | **G4** |
@@ -112,12 +113,31 @@ BLE 是「中心 ↔ 外设」的固定拓扑，而"验证电脑能不能当外�
 
 | ID | 任务 | 产出 / 完成判据 | 人日 |
 |---|---|---|---|
-| T2.1 | `IByteChannel` 接口 + `TcpLoopbackChannel` | 单机上一对 loopback 通道能互发字节 | 1 |
+| T2.1 | `IByteChannel` 接口 + `LoopbackChannel` | 单机上一对 loopback 通道能互发字节 | 1 |
 | T2.2 | 帧编解码（`MAGIC\|VER\|TYPE\|FLAGS\|SEQ\|LEN\|PAYLOAD\|TAG`） | 单测覆盖所有字段边界 | 1.5 |
 | T2.3 | 分片重组 + 边界用例：粘包、半包、超长帧、乱序、重复、损坏帧 | 协议层单测覆盖率 ≥80%（NFR-09） | 1 |
 | T2.4 | 最小可运行：控制台或极简窗口收发一行文本（走 loopback） | 单机"自己和自己聊天"跑通 | 0.5 |
 
 **需要你**：已定 → 单帧 **512 B**、单条消息 **32 KB**（≈1.09 万汉字；按 9–20 KB/s 只需 1.6–3.5 s）。图片/文件走 V1 分块通道，MVP 不做。
+
+---
+
+### P2.5 · 审查缺陷修复（0.5 人日）✅ 已完成
+
+代码审查（`docs/code-review-2026-10-26.md`）确认的缺陷，在 P3 之前修完。**这半天是省不掉的**：C1 会让 P3 无法编译，C2 会让 P3 的保活损坏消息。
+
+| ID | 缺陷 | 修复 | 验证 |
+|---|---|---|---|
+| 修1 | **C1** `Lixin.Transport` 的 TFM 是 `net9.0-windows`，没有 WinRT 投影，`using Windows.Devices.Bluetooth;` 直接 CS0246 | 全仓库 TFM 抬到 `net9.0-windows10.0.19041.0`；`Lixin.Core` 反向降到纯 `net9.0`（顺带得到「Core 误用平台 API 必然编译失败」的硬护栏） | 探针类引用 `BluetoothLEDevice` / `GattDeviceService` 编译通过 |
+| 修2 | **C2** 单帧控制帧劫持正文：300 B 被截成 104 B + 100 B，静默丢 96 B | `FrameTypes.IsFragmented` 登记可分片类型，控制帧**旁路**重组器；控制帧用**独立序号空间** | `SingleFrameControlMessage_DoesNotHijackInFlightText` 等 3 条 |
+| 修3 | **C3** 序号断裂后残余分片被当新消息，截断内容以 `Completed` 交付 | 引入**毒化**状态：损坏后丢弃后续帧直到下一个末片；`Reset()` 清除 | `LostMiddleFragment_...`、`LostLastFragment_...` 等 4 条 |
+| 修4 | **H1** 空读缓冲返回 0，与「0 = 对端已关闭」契约冲突 | 空缓冲抛 `ArgumentException`；接口注释补明「单读者」 | `EmptyReadBuffer_ThrowsInsteadOfSignallingEof` |
+| 修5 | **M4** `ChatSpike` 无论结果如何都打印成功、`ProtocolError` 被静默吞掉 | 改为真断言 + 退出码；并在最长消息正文中间**主动插入 Ping** 撞 C2 | 运行时打印 PASS/FAIL，失败退出码 1 |
+| 修6 | **M5** 文档写 `TcpLoopbackChannel`，代码是 `LoopbackChannel` | 统一命名（PRD / README / WBS / csproj 注释） | 全库检索无残留 |
+
+测试从 **24 → 32**，新增 8 条回归测试 `tests/Lixin.Tests/AssemblerRobustnessTests.cs`。
+
+**未修的（留给后续阶段）**：H2 `TAGLEN` 校验（P4 必做，安全相关）、H3 缓冲无上限（P4）、H4 序号回绕（低危）、M1 并发契约、M2 `Frame` 相等性、M3 帧头魔法偏移（P3 动 `FrameCodec` 时一并做）、L4/L5 CI。
 
 ---
 
