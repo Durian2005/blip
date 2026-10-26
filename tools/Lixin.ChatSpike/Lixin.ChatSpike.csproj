@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Lixin.ChatSpike —— P2 最小可运行验证（不是产品代码）。
+    在没有蓝牙的情况下，用内存回环通道把「分片 → 编码 → 通道 → 解帧 → 重组」整条链路跑一遍。
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>ChatSpike</AssemblyName>
+    <RootNamespace>Lixin.ChatSpike</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Lixin.Core\Lixin.Core.csproj" />
+    <ProjectReference Include="..\..\src\Lixin.Transport\Lixin.Transport.csproj" />
+  </ItemGroup>
+
+</Project>

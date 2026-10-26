@@ -30,8 +30,8 @@
 ### 1.4 已知的本机环境（实测，非估计）
 | 项 | 实测值 |
 |---|---|
-| 无线网卡 | Intel Wi-Fi 6 组合网卡（WiFi + BT 组合模块） |
-| 蓝牙适配器 | 英特尔(R) 无线 Bluetooth(R) |
+| 无线网卡 | Intel Wi-Fi 6 组合网卡（802.11ax 与蓝牙同一模块） |
+| 蓝牙适配器 | 英特尔(R) 无线 Bluetooth(R)（Intel 双模组合模块） |
 | 驱动版本 | `24.40.10.3` |
 | 蓝牙服务 | `bthserv` = Running（启动类型 Manual，按需拉起） |
 | BLE 支持 | ✅ 存在「Microsoft 蓝牙 LE 枚举器」节点 |
@@ -256,9 +256,10 @@ BLE 连接是「中心 ↔ 外设」的固定拓扑，而双方都可能想当�
 ### 7.5 协议帧格式
 
 ```
-MAGIC(2) | VER(1) | TYPE(1) | FLAGS(1) | SEQ(4) | LEN(2) | PAYLOAD(LEN) | TAG(16)
-  0x4C43   0x01    见下      bit0=分片末  ...      密文          Poly1305
+MAGIC(2) | VER(1) | TYPE(1) | FLAGS(1) | SEQ(4) | LEN(2) | TAGLEN(1) | PAYLOAD(LEN) | TAG(TAGLEN)
+  0x4C43   0x01    见下     bit0=末片   大端      大端      0 或 16        明文/密文       Poly1305
 ```
+帧头固定 12 字节。**TAGLEN 是后加的字段**（v1.2 补）：P2 阶段未加密，TAGLEN=0、TAG 为空；P4 接入 AEAD 后固定为 16。这样线格式一次定好，P4 不必再改协议。
 
 | TYPE | 名称 | 说明 |
 |---|---|---|
@@ -407,7 +408,7 @@ iOS **完全没有经典蓝牙 socket**（仅 MFi），只能 BLE；macOS 的 IO
 
 | 项目 | 结果 |
 |---|---|
-| 适配器 | Intel Wireless Bluetooth（双模组合模块） |
+| 适配器 | Intel 双模组合网卡（Wi-Fi 与蓝牙同模块） |
 | 经典蓝牙 BR/EDR | 支持 |
 | 低功耗 BLE | 支持 |
 | 中心角色 Central | 支持 |
