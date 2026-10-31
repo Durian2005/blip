@@ -17,11 +17,11 @@ namespace Lixin.BleProbe;
 internal static class Program
 {
     // 自定义 128 位 UUID，避开蓝牙 SIG 保留的 16 位段，免得被 App 按标准服务解析。
-    // ServiceUuid 末字节可用 --variant 改写：iOS 会缓存对端的 GATT 表，
+    // 服务 UUID 末字节可用 --variant 改写：iOS 会缓存对端的 GATT 表，
     // 换 UUID 是绕过缓存、判断「到底是缓存还是发布」的最快办法。
-    private static Guid ServiceUuid = new("6a1b7c00-5d2e-4f38-9a41-0c7e3b9d5f01");
-    private static readonly Guid TxUuid = new("6a1b7c01-5d2e-4f38-9a41-0c7e3b9d5f01");
-    private static readonly Guid RxUuid = new("6a1b7c02-5d2e-4f38-9a41-0c7e3b9d5f01");
+    private static Guid _serviceUuid = new("6a1b7c00-5d2e-4f38-9a41-0c7e3b9d5f01");
+    private static readonly Guid _txUuid = new("6a1b7c01-5d2e-4f38-9a41-0c7e3b9d5f01");
+    private static readonly Guid _rxUuid = new("6a1b7c02-5d2e-4f38-9a41-0c7e3b9d5f01");
 
     private static int _writeCount;
     private static int _notifyCount;
@@ -38,7 +38,7 @@ internal static class Program
         if (variantIndex >= 0 && variantIndex + 1 < args.Length)
         {
             var variant = args[variantIndex + 1].PadLeft(2, '0');
-            ServiceUuid = new Guid($"6a1b7c00-5d2e-4f38-9a41-0c7e3b9d5f{variant}");
+            _serviceUuid = new Guid($"6a1b7c00-5d2e-4f38-9a41-0c7e3b9d5f{variant}");
         }
 
         int? waitSeconds = null;
@@ -110,7 +110,7 @@ internal static class Program
 
         // ---------- 3. 创建 GATT 服务 ----------
         Log("---------- 3. 创建 GATT 服务 ----------");
-        var createResult = await GattServiceProvider.CreateAsync(ServiceUuid);
+        var createResult = await GattServiceProvider.CreateAsync(_serviceUuid);
         if (createResult.Error != BluetoothError.Success)
         {
             Log($"【失败】CreateAsync 返回 {createResult.Error}");
@@ -118,7 +118,7 @@ internal static class Program
         }
 
         var provider = createResult.ServiceProvider;
-        Log($"Service UUID        : {ServiceUuid}");
+        Log($"Service UUID        : {_serviceUuid}");
 
         // TX：手机写入这里
         var txParams = new GattLocalCharacteristicParameters
@@ -131,14 +131,14 @@ internal static class Program
             WriteProtectionLevel = GattProtectionLevel.Plain,
             // 不用 StaticValue：改由 ReadRequested 里显式回应，这样每次被读都能留下日志
         };
-        var txResult = await provider.Service.CreateCharacteristicAsync(TxUuid, txParams);
+        var txResult = await provider.Service.CreateCharacteristicAsync(_txUuid, txParams);
         if (txResult.Error != BluetoothError.Success)
         {
             Log($"【失败】创建 TX 特征值失败：{txResult.Error}");
             return 6;
         }
         var tx = txResult.Characteristic;
-        Log($"TX 特征值（写）     : {TxUuid}");
+        Log($"TX 特征值（写）     : {_txUuid}");
 
         // RX：本机通知手机。同时给 Read，因为部分平台的枚举对「全无读权限」的特征值表现异常
         var rxParams = new GattLocalCharacteristicParameters
@@ -148,14 +148,14 @@ internal static class Program
             UserDescription = "blip RX - server notifies here",
             ReadProtectionLevel = GattProtectionLevel.Plain,
         };
-        var rxResult = await provider.Service.CreateCharacteristicAsync(RxUuid, rxParams);
+        var rxResult = await provider.Service.CreateCharacteristicAsync(_rxUuid, rxParams);
         if (rxResult.Error != BluetoothError.Success)
         {
             Log($"【失败】创建 RX 特征值失败：{rxResult.Error}");
             return 7;
         }
         var rx = rxResult.Characteristic;
-        Log($"RX 特征值（通知）   : {RxUuid}");
+        Log($"RX 特征值（通知）   : {_rxUuid}");
 
         // 把「实际发布了什么」打出来，避免手机端看不到时无从判断
         Log("---------- 3.1 已发布到 GATT 数据库的内容 ----------");
@@ -374,7 +374,7 @@ internal static class Program
         Log("");
         Log("================ 接下来在 iPhone 上操作 ================");
         Log("1. 打开 nRF Connect，切到 Scanner 页，下拉刷新");
-        Log($"2. 找到名字含这台电脑名、或服务 UUID 为 {ServiceUuid} 的设备");
+        Log($"2. 找到名字含这台电脑名、或服务 UUID 为 {_serviceUuid} 的设备");
         Log("   （iOS 看不到 MAC，只能靠名字 / UUID 认）");
         Log("3. 点 CONNECT 连上 → 展开该服务 → 展开 TX 特征值");
         Log("4. 点 TX 右侧的 ↑（Write）图标，输入任意文本，选 UTF-8 提交");

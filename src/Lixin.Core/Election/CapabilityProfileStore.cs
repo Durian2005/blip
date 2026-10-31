@@ -15,9 +15,9 @@ namespace Lixin.Core.Election;
 /// </summary>
 public sealed class CapabilityProfileStore
 {
-    private static readonly string TempSuffix = ".tmp";
+    private static readonly string _tempSuffix = ".tmp";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly JsonSerializerOptions _jsonOptions = new()
     {
         WriteIndented = true,
     };
@@ -100,10 +100,10 @@ public sealed class CapabilityProfileStore
 
         Directory.CreateDirectory(_directory);
 
-        var tempPath = _filePath + TempSuffix;
+        var tempPath = _filePath + _tempSuffix;
         using (var stream = File.Create(tempPath))
         {
-            JsonSerializer.Serialize(stream, profile, JsonOptions);
+            JsonSerializer.Serialize(stream, profile, _jsonOptions);
         }
 
         File.Move(tempPath, _filePath, overwrite: true);

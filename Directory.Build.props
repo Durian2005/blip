@@ -15,6 +15,24 @@
     <Deterministic>true</Deterministic>
     <InvariantGlobalization>false</InvariantGlobalization>
 
+    <!--
+      静态分析（对应 docs/code-review-2026-10-26.md 的 L6）：
+      · AnalysisLevel=latest —— 启用全部 .NET 分析器；
+      · TreatWarningsAsErrors —— 编译警告即错误，"0 警告"从人工纪律变成硬约束；
+      · EnforceCodeStyleInBuild 故意保持 false —— IDE 代码风格（IDE0xxx）只在编辑器和
+        `dotnet format` 里体现，不进构建。否则一次风格讨论就能让 build 挂掉，
+        而风格问题不应阻断功能验证。风格基线由根目录 .editorconfig 描述。
+    -->
+    <AnalysisLevel>latest</AnalysisLevel>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+
+    <!--
+      公共 API 全部写了 XML 注释，打开文档文件生成让注释有产物、缺失注释有 CS1591 警告
+      （配合 TreatWarningsAsErrors，漏注释会直接构建失败）。
+    -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
     <Version>0.1.0</Version>
     <Product>blip</Product>
     <Description>Offline P2P messenger over Bluetooth LE.</Description>
