@@ -60,7 +60,17 @@ public sealed class FrameReader
                 continue;
             }
 
-            var payloadLength = BinaryPrimitives.ReadUInt16BigEndian(span[9..]);
+            var payloadLength = BinaryPrimitives.ReadUInt16BigEndian(span.Slice(HeaderOffsets.PayloadLength, 2));
+
+            // H2：TAGLEN 非法与长度非法同样处置——丢首字节重新同步。
+            // 不这样做的后果是读取器永远等一个凑不齐的"完整帧"，链路静默死亡且不报错。
+            var tagLength = span[HeaderOffsets.TagLength];
+            if (tagLength != ProtocolConstants.NoAuthTag && tagLength != ProtocolConstants.AuthTagSize)
+            {
+                _buffer.RemoveAt(0);
+                DiscardedBytes++;
+                continue;
+            }
 
             // 长度非法（超过单帧上限）：丢弃当前首字节再同步，避免无限等待
             if (payloadLength > ProtocolConstants.MaxPayload)

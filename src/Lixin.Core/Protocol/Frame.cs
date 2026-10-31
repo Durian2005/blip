@@ -3,6 +3,9 @@ namespace Lixin.Core.Protocol;
 /// <summary>
 /// 一个协议帧。线格式：
 /// MAGIC(2) | VER(1) | TYPE(1) | FLAGS(1) | SEQ(4,BE) | LEN(2,BE) | TAGLEN(1) | PAYLOAD(LEN) | TAG(TAGLEN)
+///
+/// 相等性是**按内容**的（审查 M2）：载荷即使来自不同的数组，内容相同即相等。
+/// record struct 的默认相等性对 <see cref="ReadOnlyMemory{T}"/> 按引用比较，对线格式值对象是错的语义。
 /// </summary>
 /// <param name="Version">协议版本。</param>
 /// <param name="Type">帧类型。</param>
@@ -25,4 +28,33 @@ public readonly record struct Frame(
     public static Frame Create(FrameType type, uint sequence, ReadOnlyMemory<byte> payload, bool lastFragment = true)
         => new(ProtocolConstants.Version, type, lastFragment ? FrameFlags.LastFragment : FrameFlags.None,
                sequence, payload, ReadOnlyMemory<byte>.Empty);
+
+    /// <summary>按内容比较：五个头字段原值比较，载荷与标签逐字节比较。</summary>
+    public bool Equals(Frame other)
+        => Version == other.Version
+           && Type == other.Type
+           && Flags == other.Flags
+           && Sequence == other.Sequence
+           && Payload.Span.SequenceEqual(other.Payload.Span)
+           && AuthTag.Span.SequenceEqual(other.AuthTag.Span);
+
+    // Equals(object?) 由 record struct 自动合成，内部转调用上面这个强类型版本，不重复声明。
+
+    /// <inheritdoc/>
+    /// <remarks>与 <see cref="Equals(Frame)"/> 同源：相等必同哈希。</remarks>
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(Version);
+        hash.Add(Type);
+        hash.Add(Flags);
+        hash.Add(Sequence);
+        hash.AddBytes(Payload.Span);
+        hash.AddBytes(AuthTag.Span);
+        return hash.ToHashCode();
+    }
+
+    /// <summary>排障友好的一行摘要：类型、序号、标志、载荷与标签长度。</summary>
+    public override string ToString()
+        => $"Frame {Type} seq={Sequence} flags={Flags} len={Payload.Length} tag={AuthTag.Length}";
 }

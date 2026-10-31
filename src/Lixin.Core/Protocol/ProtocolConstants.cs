@@ -20,6 +20,12 @@ public static class ProtocolConstants
     /// <summary>AEAD 认证标签长度。P2 阶段为 0（未加密），P4 起为 16。</summary>
     public const int AuthTagSize = 16;
 
+    /// <summary>
+    /// 未加密帧的 TAGLEN 取值。线格式只允许 <see cref="NoAuthTag"/> 与 <see cref="AuthTagSize"/> 两种，
+    /// 其余值一律按字节流错位处理（H2，见 FrameCodec / FrameReader 的校验）。
+    /// </summary>
+    public const int NoAuthTag = 0;
+
     /// <summary>单条逻辑消息上限（32 KB，约 1.09 万汉字）。</summary>
     public const int MaxMessageSize = 32 * 1024;
 }

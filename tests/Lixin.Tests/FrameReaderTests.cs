@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using Lixin.Core.Protocol;
 
 namespace Lixin.Tests;
@@ -63,12 +64,11 @@ public class FrameReaderTests
     {
         // 伪造一个 LEN = 0xFFFF 的坏帧头，后面紧跟一个合法帧
         var bogus = new byte[ProtocolConstants.HeaderSize];
-        bogus[0] = (byte)(ProtocolConstants.Magic >> 8);
-        bogus[1] = (byte)(ProtocolConstants.Magic & 0xFF);
-        bogus[2] = ProtocolConstants.Version;
-        bogus[3] = (byte)FrameType.Text;
-        bogus[9] = 0xFF;
-        bogus[10] = 0xFF;
+        bogus[HeaderOffsets.Magic] = (byte)(ProtocolConstants.Magic >> 8);
+        bogus[HeaderOffsets.Magic + 1] = (byte)(ProtocolConstants.Magic & 0xFF);
+        bogus[HeaderOffsets.Version] = ProtocolConstants.Version;
+        bogus[HeaderOffsets.Type] = (byte)FrameType.Text;
+        BinaryPrimitives.WriteUInt16BigEndian(bogus.AsSpan(HeaderOffsets.PayloadLength), 0xFFFF);
 
         var good = Encode(FrameType.Text, 5, "recovered");
         var reader = new FrameReader();
@@ -90,5 +90,35 @@ public class FrameReaderTests
         Assert.False(reader.TryRead(out _));
         Assert.Equal(5, reader.BufferedBytes);
         Assert.Equal(0, reader.DiscardedBytes);
+    }
+
+    /// <summary>
+    /// H2：TAGLEN 非法（不是 0 也不是 AuthTagSize）的帧头必须触发重新同步，
+    /// 绝不能让读取器干等一个永远凑不齐的"完整帧"。
+    /// </summary>
+    [Fact]
+    public void InvalidTagLength_DoesNotHang_AndResyncs()
+    {
+        // 魔数合法、LEN=3、TAGLEN=5 的坏帧头，后面紧跟一个合法帧
+        var bogus = new byte[ProtocolConstants.HeaderSize + 3];
+        bogus[HeaderOffsets.Magic] = (byte)(ProtocolConstants.Magic >> 8);
+        bogus[HeaderOffsets.Magic + 1] = (byte)(ProtocolConstants.Magic & 0xFF);
+        bogus[HeaderOffsets.Version] = ProtocolConstants.Version;
+        bogus[HeaderOffsets.Type] = (byte)FrameType.Text;
+        BinaryPrimitives.WriteUInt16BigEndian(bogus.AsSpan(HeaderOffsets.PayloadLength), 3);
+        bogus[HeaderOffsets.TagLength] = 5;
+        bogus[HeaderOffsets.Payload] = (byte)'a';
+        bogus[HeaderOffsets.Payload + 1] = (byte)'b';
+        bogus[HeaderOffsets.Payload + 2] = (byte)'c';
+
+        var good = Encode(FrameType.Text, 5, "recovered");
+        var reader = new FrameReader();
+        reader.Append(bogus);
+        reader.Append(good);
+
+        Assert.True(reader.TryRead(out var parsed));
+        Assert.Equal("recovered", System.Text.Encoding.UTF8.GetString(parsed.Payload.Span));
+        Assert.Equal(bogus.Length, reader.DiscardedBytes);
+        Assert.Equal(0, reader.BufferedBytes);
     }
 }
