@@ -120,6 +120,8 @@ BLE 是「中心 ↔ 外设」的固定拓扑，而"验证电脑能不能当外�
 
 **需要你**：已定 → 单帧 **512 B**、单条消息 **32 KB**（≈1.09 万汉字；按 9–20 KB/s 只需 1.6–3.5 s）。图片/文件走 V1 分块通道，MVP 不做。
 
+> **NFR-09 首次量化（2026-10-31）**：`dotnet test --collect:"XPlat Code Coverage"`（coverlet.collector 已在测试项目，TestResults/ 已 gitignore）。实测：总体行覆盖 **94.8%**（511/539）、分支 92.8%；**协议层 Lixin.Core 95.1% 行 / 93.8% 分支**、安全层 Lixin.Security 100%、Lixin.Transport 94.0%——NFR-09 三项判据（协议层与安全层 ≥80%、整体 ≥60%）**全部达标**。未覆盖行集中在防御性路径，不影响判据：`CapabilityProfileStore` 损坏档案重建与读取失败（约 9 行）、`LoopbackChannel` Dispose/关闭路径（7 行）、`MessageAssembler` 类型交错与超限（4 行）、`MessageFragmenter` 参数校验（3 行）、`FrameCodec`/`BleGattFraming` 参数校验（各 2 行）。每个门禁前重跑一次即可，无需新增配置。
+
 ---
 
 ### P2.5 · 审查缺陷修复（0.5 人日）✅ 已完成
