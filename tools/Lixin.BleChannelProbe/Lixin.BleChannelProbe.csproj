@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Lixin.BleChannelProbe —— T3.1 外设侧的真机验收工具（不是产品代码，不会打进发布包）。
+    和 Lixin.BleProbe 的区别：
+      BleProbe      = P1a 阶段验证「这台机器能不能当 BLE 外设」（裸 WinRT，不含产品代码）
+      BleChannelProbe = T3.1 阶段验证「BleGattPeripheralChannel 这个实现对不对」（跑产品类）
+
+    TFM 从 Directory.Build.props 继承（net9.0-windows10.0.19041.0），不重复声明，
+    避免和全仓库默认值漂移 —— 这个坑记在 Lixin.Transport.csproj 的注释里。
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>BleChannelProbe</AssemblyName>
+    <RootNamespace>Lixin.BleChannelProbe</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Lixin.Core\Lixin.Core.csproj" />
+    <ProjectReference Include="..\..\src\Lixin.Transport\Lixin.Transport.csproj" />
+  </ItemGroup>
+
+</Project>

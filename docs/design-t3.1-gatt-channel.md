@@ -238,3 +238,49 @@ async Task HandleWriteAsync(...)
 通知速率、实际 MTU、以及 §8 那张表里的全部条目，都还是**未验证状态**。
 单测只能覆盖 `BleGattPeripheralOptions` 默认值与失败分类，`StartAsync` 必须有真机。
 
+### 10.7 ★ §5 的广播方案装不下 —— 实测确认
+
+真机跑起来第一眼就看到：
+
+```
+[通道] 广播状态 → Aborted
+[通道] 广播状态 → StartedWithoutAllAdvertisementData
+```
+
+`StartedWithoutAllAdvertisementData` 不报错，只是**悄悄少发一部分数据**。算一遍预算就清楚：
+
+| 广播内容 | 占用 |
+|---|---|
+| Flags AD（1 长度 + 1 类型 + 1 数据） | 3 B |
+| 128 位 Service UUID 列表（1 + 1 + 16） | 18 B |
+| **小计（不含 ServiceData）** | **21 B** |
+| Service Data − 128 位 UUID（1 + 1 + **16** + 18） | **36 B** |
+| 合计 | 57 B |
+
+Legacy Advertising 的 PDU 有效载荷上限是 **31 B**，装 57 B 是不可能的。
+
+**结论**：只要服务 UUID 是 128 位，就**不可能**同时携带 ServiceData —— 后者光自己的
+UUID 前缀就吃掉 16 B。§5「Service UUID 同时放进广播数据」这句在物理上不成立。
+
+**当前处置**（不改接口，先让问题可见）：
+
+- 服务 UUID 仍在广播里（21 B < 31 B），所以**按 UUID 发现照常工作**，FR-03 不受影响；
+- `ServiceData` 被系统丢弃，代码在启动后读一次 `AdvertisementStatus` 并给出明确日志，
+  而不是让调用方对着 `Aborted` 猜；
+- 竞选键改从 **META 特征值**读取（连接建立后一次 read），META 本来就是为这个准备的。
+
+**待办（需要拍板）**：PRD §7.4.2「18 B 发现载荷放广播里」需要修订为
+「靠服务 UUID 发现 + 连接后读 META」。这会改动 T3.2 的选举时机
+（从「连接前决定」变成「连接后决定」），不属于可以顺手改的范围，**未擅自修改 PRD**。
+
+### 10.8 广播状态是异步落定的
+
+`StartAdvertising()` 返回时读 `AdvertisementStatus` 得到的是**瞬态 `Aborted`**，
+约 80–100 ms 后才落到 `Started` / `StartedWithoutAllAdvertisementData`。
+
+第一版代码在 `StartAdvertising` 之后立刻读状态并把它解释成「广播被中止，本机无法被搜到」——
+**这是误报**，会把正常启动过程当成故障，让联调时往错误方向排查。
+
+修法：等 200 ms 再读最终状态；同时把 `Aborted` 的措辞改成「启动瞬态，若 200 ms 后仍停在这里才是真失败」。
+
+
