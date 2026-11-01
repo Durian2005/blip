@@ -100,7 +100,9 @@ public sealed class BleGattPeripheralChannel : IByteChannel
     /// <remarks>
     /// 触发条件是订阅者数量**从大于 0 变成 0**——单看「当前为 0」会把
     /// 「已连接但还没订阅」误判成断开。
-    /// 本事件不自动关闭通道：是否重连由 T3.3 决定，通道层不做策略。
+    /// 触发后通道**会自行关闭**，<see cref="ReceiveAsync"/> 随即返回 0：
+    /// 「永久挂在 ReceiveAsync 上等一个不会来的数据」不是可用的断线语义。
+    /// **是否重连由 T3.3 决定，通道层不做策略**——上层读到 0 后自行重建通道。
     /// </remarks>
     public event EventHandler? ClientDisconnected;
 
@@ -244,7 +246,13 @@ public sealed class BleGattPeripheralChannel : IByteChannel
                 $"开始广播失败：{ex.GetType().Name}: {ex.Message}");
         }
 
-        log?.Invoke($"广播已启动：{provider.AdvertisementStatus}");
+        // 广播状态是异步落定的：实测 StartAdvertising 返回时读到的还是瞬态 Aborted，
+        // 约 80–100 ms 后才变成 Started / StartedWithoutAllAdvertisementData。
+        // 这里等一下再读，否则会把正常启动过程当成失败（本轮实测踩到的坑）。
+        await Task.Delay(TimeSpan.FromMilliseconds(200), cancellationToken).ConfigureAwait(false);
+
+        var finalStatus = provider.AdvertisementStatus;
+        log?.Invoke($"广播状态确认：{finalStatus}{ExplainAdvertisementStatus(finalStatus)}");
         return channel;
     }
 
@@ -548,6 +556,14 @@ public sealed class BleGattPeripheralChannel : IByteChannel
         {
             _log?.Invoke("中心已断开（订阅者 1 → 0）");
             ClientDisconnected?.Invoke(this, EventArgs.Empty);
+
+            // 必须让 ReceiveAsync 返回 0：这是 IByteChannel 的断链契约（返回 0 = 对端已关闭），
+            // 只发事件不关 inbox 会让它永久挂起，上层永远等不到断线信号。
+            // Complete 本身是 O(1) 非阻塞的，在系统线程上调用安全。
+            _inbox.Complete();
+
+            // 停广播会走 WinRT 同步调用，可能慢，不能占着系统回调线程做。
+            _ = Task.Run(CloseAsync);
         }
     }
 
@@ -556,8 +572,33 @@ public sealed class BleGattPeripheralChannel : IByteChannel
         GattServiceProviderAdvertisementStatusChangedEventArgs args)
     {
         var suffix = args.Error == BluetoothError.Success ? string.Empty : $"（错误：{args.Error}）";
-        _log?.Invoke($"广播状态 → {args.Status}{suffix}");
+        _log?.Invoke($"广播状态 → {args.Status}{suffix}{ExplainAdvertisementStatus(args.Status)}");
     }
+
+    /// <summary>
+    /// 把广播状态翻译成可操作的信息。
+    /// </summary>
+    /// <remarks>
+    /// <c>StartedWithoutAllAdvertisementData</c> 最关键：它**不报错**，只是悄悄少发一部分数据，
+    /// 现象是「手机能扫到设备，但 ServiceData 是空的」。实测（2026-11-01）带 18 B ServiceData
+    /// 启动时必然进入这个状态，原因是 Legacy 广播的 31 B 预算根本装不下：
+    /// Flags 3 B + 128 位 UUID AD 18 B = 21 B，只剩 10 B，而「带 128 位 UUID 的 ServiceData」
+    /// 单项就要 2 + 16 + 18 = 36 B。所以要靠服务 UUID 发现，竞选键改从 META 读。
+    ///
+    /// <c>Aborted</c> 则是**启动瞬态**：实测 <c>StartAdvertising</c> 之后约 80–100 ms 内会先报
+    /// <c>Aborted</c>，随后自动重试落到 <c>Started</c> 或 <c>StartedWithoutAllAdvertisementData</c>。
+    /// 所以这里不能把它说成「无法被搜到」——那会把正常的启动过程误报成故障。
+    /// </remarks>
+    private static string ExplainAdvertisementStatus(GattServiceProviderAdvertisementStatus status)
+        => status switch
+        {
+            GattServiceProviderAdvertisementStatus.StartedWithoutAllAdvertisementData =>
+                " ⚠ 广播包超出 31 B 上限，系统丢弃了部分内容（几乎肯定是 ServiceData）。"
+                + "设备仍可被按服务 UUID 搜到；竞选键请让对端改读 META 特征值。",
+            GattServiceProviderAdvertisementStatus.Aborted =>
+                " （启动瞬态；若 200 ms 后仍停在这里才是真失败）",
+            _ => string.Empty,
+        };
 
     // ------------------------------------------------------------------
     // 辅助
