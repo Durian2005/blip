@@ -45,13 +45,19 @@ PRD 选 `WriteWithoutResponse` 是对的，理由不是"省一个往返"，而�
 
 **不会丢的地方**：BLE 链路层自带 CRC 校验 + 自动重传（LL retransmission）。一个 Write Command 不会在射频层被"咬掉半截"。所以**不需要**在通道层再做字节级 ACK/重传——那是把链路层已经做过的事再做一遍。
 
-**真正会丢的地方**：本地发送队列溢出。WinRT 的 `WriteValueWithResultAsync` / `NotifyValueAsync` 在队列满时会返回 `InsufficientResources` 而不是排队等待。
+**真正会丢的地方**：本地发送队列溢出。这一层在 WinRT 里的实际表现是**背压**而不是错误码——
+`NotifyValueAsync` 在协议栈收不下时会迟迟不返回，`await` 自然限流。
+
+> ⚠️ **编码期修正（2026-11-01）**：本文初稿写的是「队列满返回 `InsufficientResources`」，
+> 这是错的。`GattCommunicationStatus` 只有 `Success` / `Unreachable` / `ProtocolError` / `AccessDenied`
+> 四个值，没有 `InsufficientResources`（那是 `BluetoothError` 家族的命名风格）。
+> 实现时改为「对 `Unreachable` 退避重试」，见 §10。
 
 **所以处置是**：
 
-- 每次写都要检查返回的 `GattCommunicationStatus`；
+- 每次写都要检查返回的 `GattCommunicationStatus`（`NotifyValueAsync` 返回的是**每个订阅者一条**结果，取最差）；
 - `Success` → 继续下一块；
-- `InsufficientResources` → 退避 10 ms 后重试，最多 20 次（约 200 ms）；
+- `Unreachable` → 退避 10 ms 后重试，最多 20 次（约 200 ms）；
 - 其它状态 / 重试耗尽 → **断链 + 记日志**，绝不跳过这一块继续写。
 
 跳过一块的后果是字节流中间少一段，帧层会解析出乱码帧，而现象是"偶尔消息内容损坏"——这是最难定位的一类故障。**宁可断线，不要错位。**
@@ -114,11 +120,11 @@ Windows 侧改了会生效，iOS 侧不会——iOS 按设备缓存对端 GATT �
 
 ```
 src/Lixin.Transport/
-  BleGattUuids.cs              ← 常量（决策 D）
-  BleGattFraming.cs            ← MTU 观测 + 切块（决策 A）
-  BleGattInbox.cs              ← 同步入队 + 溢出即断链（决策 C）
-  BleGattPeripheralChannel.cs  ← 外设侧：GattServiceProvider + 可连接广播
-  BleGattCentralChannel.cs     ← 中心侧：扫描 + 连接 + 订阅通知
+  BleGattUuids.cs              ← 常量（决策 D）                 ✅
+  BleGattFraming.cs            ← MTU 观测 + 切块（决策 A）        ✅
+  BleGattInbox.cs              ← 同步入队 + 溢出即断链（决策 C）   ✅
+  BleGattPeripheralChannel.cs  ← 外设侧（决策 B + 接收路径）      ✅ 待真机验证
+  BleGattCentralChannel.cs     ← 中心侧：扫描 + 连接 + 订阅通知   ⬜ 未开始
 ```
 
 `IByteChannel` 签名一个字都不改。`LoopbackChannel` 与两个新实现的关系是并列的，上层（`FrameReader` / `MessageAssembler`）完全不知道底下是内存还是蓝牙——这是 P2 阶段就固化好的边界，T3.1 不许突破。
@@ -141,13 +147,94 @@ src/Lixin.Transport/
 
 第 5 项依赖手机侧能当外设（已实测 iPhone XS Max 支持，见 P1 记录）。
 
-## 9. 明确留白：这些不要现在写死
+## 9. 明确留白：这些只能真机确认
 
-以下事项**只能真机确认**，编码时留接口、不要凭猜测硬编码：
+以下事项**只能真机确认**，编码时不凭猜测硬编码 —— 已按此原则做成可替换点 + 日志探针，
+答案见 §10。
 
-1. **外设侧如何感知中心断开**——`GattServiceProvider` 没有直接的 `Session` 属性，候选是 `SubscribedClientsChanged` 或 `GattSession`。实测后再定。
-2. **外设侧收到 `WriteWithoutResponse` 是否必须 `Respond()`**——协议上无需应答，但 WinRT 的实际行为要在真机上确认（若不 Respond 会导致中心侧写挂起，就必须补上）。
+1. **外设侧如何感知中心断开**——`GattServiceProvider` 没有直接的 `Session` 属性，候选是 `SubscribedClientsChanged` 或 `GattSession`。
+2. **外设侧收到 `WriteWithoutResponse` 是否必须 `Respond()`**——协议上无需应答，但 WinRT 的实际行为要在真机上确认。
 3. **`MaxPduSize` 的实际协商值**——P1 记录里没有具体数字。真机读到后记进本文，作为后续性能估算的依据。
 4. **Windows 作为外设时的实际通知速率**——`NotifyValueAsync` 的吞吐受协议栈限制，PRD 记的 9–20 KB/s 是射频层数据，应用层还要减去 ATT 开销。
 
 这四项都不要在编码阶段"先猜一个"，猜错的代价是联调时把 bug 归因到错误的地方。
+
+---
+
+## 10. 编码期修正与留白答案（2026-11-01）
+
+`BleGattPeripheralChannel` 落地时逐条核对了 §9，结论如下。
+凡与初稿冲突的，**以本节为准**，初稿相应位置已就地标注。
+
+### 10.1 §3 的 `InsufficientResources` 不存在
+
+`GattCommunicationStatus` 只有四个值：`Success` / `Unreachable` / `ProtocolError` / `AccessDenied`。
+初稿把 `BluetoothError` 家族的命名套用到了这里。实现改为：
+
+| 返回值 | 处置 |
+|---|---|
+| `Success` | 继续下一块 |
+| `Unreachable` | 退避 10 ms 重试，上限 20 次（约 200 ms）——可能是瞬断，也可能是协议栈暂时收不下 |
+| `ProtocolError` / `AccessDenied` | 直接断链，不重试 |
+
+真正的背压表现为 `NotifyValueAsync` 迟迟不返回，`await` 本身就是流控，不需要额外代码。
+
+### 10.2 留白 1 → 用 `SubscribedClientsChanged`
+
+P1 实测（BleProbe）已确认该事件能可靠反映中心连上/断开，不需要再找 `GattSession`。
+
+**关键判定条件：从 >0 变成 0 才算断开。** 单看「当前为 0」是错的——
+中心可能连上了但还没点订阅，那不是断开。`BleGattPeripheralChannel.ClientDisconnected`
+按此条件触发，并且**不自动关闭通道**（重连策略归 T3.3）。
+
+### 10.3 留白 2 → 默认应答，但保留退路
+
+证据冲突：
+
+| 来源 | 结论 |
+|---|---|
+| WinRT 文档 | 写请求必须调用 `Respond()` 才算处理完成 |
+| P1 实测（BleProbe） | 只在 `WriteWithResponse` 时调用，iPhone 写入照样成功 |
+
+取**更符合契约**的一侧：`AlwaysRespondToWrite` 默认 `true`。
+应答失败只记日志、不中断链路——数据已经进 inbox，应答是另一条路径上的事。
+
+### 10.4 留白 3 → `GattWriteRequestedEventArgs.Session` 是唯一入口
+
+外设侧能拿 MTU 的唯一途径就是写入事件的 `Session` 属性，**中心发来第一块数据之前读不到**。
+所以：
+
+- 发送侧 `BleGattFraming.PayloadSizeFor(0)` 按 23 兜底 → 20 B，永远正确但保守；
+- 首次写入时读到实际值并订阅 `MaxPduSizeChanged`，之后自动跟随；
+- 实际协商值待真机验证后补到本节。
+
+### 10.5 新增发现：§4「回调全同步」要打个补丁
+
+初稿说接收路径「三步全部同步完成」。实际做不到——`GetRequestAsync()` 是 WinRT 规定的取
+request 对象的方式，**必须 await**。
+
+但 §4 的**本意**是对的，正确落地方式是：
+
+```csharp
+void OnWriteRequested(...)          // 系统线程，立刻返回
+{
+    var deferral = args.GetDeferral();
+    _ = HandleWriteAsync(args, deferral);   // 起后台任务
+}
+
+async Task HandleWriteAsync(...)
+{
+    var request = await args.GetRequestAsync().AsTask().ConfigureAwait(false);  // ← 必须
+    // 拿到 request 之后：拷字节、TryPost、Respond，全部同步，不 await 任何自家代码
+}
+```
+
+**`ConfigureAwait(false)` 是硬要求**：WPF 下有 `SynchronizationContext`，
+少了它续行会回到 UI 线程，而这段代码每来一块数据就跑一遍 —— 直接把界面拖死。
+这个坑在控制台工具（BleProbe）里不会暴露，因为控制台没有 `SynchronizationContext`。
+
+### 10.6 留白 4 与 §8 验收项 1–7 仍未验证
+
+通知速率、实际 MTU、以及 §8 那张表里的全部条目，都还是**未验证状态**。
+单测只能覆盖 `BleGattPeripheralOptions` 默认值与失败分类，`StartAsync` 必须有真机。
+
