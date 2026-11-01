@@ -43,6 +43,16 @@ csharp_preserve_single_line_statements = true
 csharp_using_directive_placement = outside_namespace
 
 # ---------- 命名（与现有代码一致：公开成员 PascalCase，私有字段 _camelCase） ----------
+
+# const 走 PascalCase，不是 _camelCase：常量是「值」而不是「私有状态」，
+# 加 _ 前缀既反 C# 惯例，也和 ProtocolConstants 里的写法自相矛盾。
+# required_modifiers = const 让这条比下面的 private_fields 更具体，从而优先匹配。
+dotnet_naming_rule.constants_should_be_pascal_case.severity = warning
+dotnet_naming_rule.constants_should_be_pascal_case.symbols = constants
+dotnet_naming_rule.constants_should_be_pascal_case.style = pascal_case_style
+dotnet_naming_symbols.constants.applicable_kinds = field
+dotnet_naming_symbols.constants.required_modifiers = const
+
 dotnet_naming_rule.private_fields_should_be_camel_case_with_underscore.severity = warning
 dotnet_naming_rule.private_fields_should_be_camel_case_with_underscore.symbols = private_fields
 dotnet_naming_rule.private_fields_should_be_camel_case_with_underscore.style = camel_case_with_underscore_style
