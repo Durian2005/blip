@@ -434,7 +434,7 @@ iOS **完全没有经典蓝牙 socket**（仅 MFi），只能 BLE；macOS 的 IO
 | # | 问题 | 影响 | 备注 |
 |---|---|---|---|
 | Q1 | GitHub 仓库名 | 影响仓库地址、README/安装包命名 | 候选见下表，**建议 `blip`** |
-| Q2 | ~~第二台机器的系统版本与蓝牙型号~~ → **实际只有一台笔记本 + iPhone XS Max** | 不再影响设计（D1 已覆盖能力不对等）。单机验证用 iPhone 当 BLE 对端（iPhone 的 nRF Connect 同时支持中心与外设角色）；**双 Windows 端到端（G1b）需临时借一台电脑 2 小时**，见 WBS P1b | 不阻塞开发，只推迟 G1b |
+| Q2 | ~~第二台机器的系统版本与蓝牙型号~~ → **实际只有一台笔记本 + iPhone XS Max** | 不再影响设计（D1 已覆盖能力不对等）。单机验证用 iPhone 当 BLE 对端（iPhone 的 nRF Connect 同时支持中心与外设角色）；**双 Windows 端到端（G1b）需临时借一台电脑 2 小时**，见 WBS P1b。**（WBS v1.2 澄清）**：P3/T3.1 的全部真机验收也可用 iPhone 完成，P1b 只做「Windows 对 Windows」终极确认，不阻塞主线 | 不阻塞开发，只推迟 G1b |
 
 #### 仓库名候选
 
