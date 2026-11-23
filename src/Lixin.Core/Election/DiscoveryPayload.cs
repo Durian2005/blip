@@ -1,17 +1,13 @@
 namespace Lixin.Core.Election;
 
 /// <summary>
-/// 广播发现载荷：塞进 BLE 广播的厂商自定义数据里，是双方**在建立连接之前**交换的唯一信息。
+/// 发现载荷：版本 + 能力位 + 竞选键，共 18 字节。
 ///
-/// 线格式（共 18 字节，必须同步 PRD §7.4.1）：
-/// <code>
-/// BYTE 0      : 版本，恒 0x01
-/// BYTE 1      : 能力位。bit0 = 可当外设（可连接广播），bit1 = 可当中心（可发起连接）
-/// BYTE 2..17  : 竞选键，16 字节，原样二进制（不做 Base64，省空间）
-/// </code>
-///
-/// 18 字节放进厂商数据（Legacy 广播 31 字节上限内绰绰有余）。
-/// 公司 ID 由传输层选（T3.1），本类型只负责载荷本身的编解码。
+/// v1.4 修订（2026-11-01 真机实测驱动）：Legacy 广播 31 B 预算装不下
+/// 「128 位 Service UUID AD（18 B）+ 本载荷（36 B）」，系统会悄悄丢弃 ServiceData
+/// （StartedWithoutAllAdvertisementData，不报错）。因此载荷**不再放广播**，
+/// 改放 META 特征值，连接建立后一次 read 获取；发现只靠广播里的 Service UUID。
+/// 线格式本身与 v1.3 一致，必须同步 PRD §7.4.2。
 /// </summary>
 public static class DiscoveryPayload
 {
