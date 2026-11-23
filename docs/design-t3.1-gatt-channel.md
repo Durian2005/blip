@@ -123,8 +123,10 @@ src/Lixin.Transport/
   BleGattUuids.cs              ← 常量（决策 D）                 ✅
   BleGattFraming.cs            ← MTU 观测 + 切块（决策 A）        ✅
   BleGattInbox.cs              ← 同步入队 + 溢出即断链（决策 C）   ✅
+  BleGattEnvironment.cs        ← Radio 检查（外设/中心共用）      ✅
+  BleGattScanPolicy.cs         ← 扫描候选的纯决策逻辑（可单测）   ✅
   BleGattPeripheralChannel.cs  ← 外设侧（决策 B + 接收路径）      ✅ 待真机验证
-  BleGattCentralChannel.cs     ← 中心侧：扫描 + 连接 + 订阅通知   ⬜ 未开始
+  BleGattCentralChannel.cs     ← 中心侧：扫描 + 连接 + 订阅通知   ✅ 待真机验证
 ```
 
 `IByteChannel` 签名一个字都不改。`LoopbackChannel` 与两个新实现的关系是并列的，上层（`FrameReader` / `MessageAssembler`）完全不知道底下是内存还是蓝牙——这是 P2 阶段就固化好的边界，T3.1 不许突破。
@@ -283,5 +285,52 @@ UUID 前缀就吃掉 16 B。§5「Service UUID 同时放进广播数据」这句
 **这是误报**，会把正常启动过程当成故障，让联调时往错误方向排查。
 
 修法：等 200 ms 再读最终状态；同时把 `Aborted` 的措辞改成「启动瞬态，若 200 ms 后仍停在这里才是真失败」。
+
+## 11. 中心侧（`BleGattCentralChannel`）编码注记（2026-11-23）
+
+T3.1 中心侧落地时的决策与依据，供真机验收（§8 第 5 项）与 T3.3 参考。
+
+### 11.1 扫描：硬件级服务 UUID 过滤 + 纯决策选择器
+
+- `BluetoothLEAdvertisementWatcher` 用 `AdvertisementFilter` 按 `BleGattUuids.Service`
+  做**硬件级过滤**：不相关广播根本不进回调，省电且日志干净；回调里再做一次
+  防御性检查（双保险）。
+- 「选哪个候选去连」是纯逻辑，独立成 `BleGattScanPolicy`（无 WinRT 依赖，17 条单测）：
+  同地址去重留最新、保鲜窗口内才参与、最强 RSSI 优先、**RSSI 并列取小地址**（确定性仲裁，
+  与竞选键哲学一致）。保鲜窗口 2 s：还在广播的设备不可能几秒没有新观测。
+- `ScanTimeoutMs`（默认 15 s）超时抛 `BleGattStartupException(DiscoveryFailed)`。
+
+### 11.2 连接与服务发现：全部 `Uncached`
+
+- `FromBluetoothAddressAsync` **不发起连接**——真正的连接发生在第一个 GATT 操作上；
+  拿到 null 只说明地址无效/设备不可达。
+- `GetGattServicesForUuidAsync` / `GetCharacteristicsAsync` 一律 `BluetoothCacheMode.Uncached`：
+  Windows 本机也缓存对端 GATT 表，调试期对端改动会被缓存掩盖（iOS 缓存坑的 Windows 版）。
+- TX/RX 缺失 = 启动失败（`ServiceDiscoveryFailed`）；**META 缺失不失败**——
+  它是元信息不是数据通道，读不到时上层按「拿不到 = 信息缺失」保守决策（T3.2/T3.3 语义）。
+
+### 11.3 MTU：中心侧在连接时即可观测
+
+外设侧要等中心写第一块才能从 `Session` 读 MTU（§10.4）；中心侧有 `GattSession.FromDeviceIdAsync`
+直接入口，**连接建立即读**，并订阅 `MaxPduSizeChanged` 跟随。切块逻辑与外设侧完全一致
+（`BleGattFraming.PayloadSizeFor`，默认 23 → 20 B 兜底）。
+
+### 11.4 `MaintainConnection = true`
+
+链路上没有未完成的 GATT 操作时，协议栈可能主动断开空闲链路。聊天会话要长期保持，
+显式钉住；`CloseAsync` 里先恢复 `false` 再 Dispose。
+
+### 11.5 断链语义（与外设侧对齐）
+
+- 信号源：`BluetoothLEDevice.ConnectionStatusChanged` → `Disconnected`；
+- 触发 `ConnectionLost`（**只触发一次**，`Interlocked` 守卫 CloseAsync 自己触发的回调）；
+- `_inbox.Complete()` 让 `ReceiveAsync` 返回 0 —— 与外设侧 `ClientDisconnected` 同一套契约；
+- 收尾动作 `Task.Run(CloseAsync)`，不占系统回调线程（design §4 的约束对中心侧同样成立：
+  `ValueChanged` 也是系统回调，拷字节 + `TryPost` 全同步）。
+
+### 11.6 `TargetAddress` 直连是为 T3.3 铺的路
+
+断线重连时地址已知，`BleGattCentralOptions.TargetAddress` 跳过扫描直连——
+再扫一遍既慢（15 s 超时预算）又可能扫到别的实例。T3.3 的退避重连直接复用。
 
 

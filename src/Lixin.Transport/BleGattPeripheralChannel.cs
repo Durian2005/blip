@@ -1,7 +1,6 @@
 using Lixin.Core.Transport;
 using Windows.Devices.Bluetooth;
 using Windows.Devices.Bluetooth.GenericAttributeProfile;
-using Windows.Devices.Radios;
 using Windows.Foundation;
 using Windows.Storage.Streams;
 
@@ -18,7 +17,8 @@ namespace Lixin.Transport;
 /// <list type="bullet">
 /// <item>发：<see cref="SendAsync"/> → 按 MTU 切块 → <c>NotifyValueAsync</c> 推 RX 特征值；</item>
 /// <item>收：<c>WriteRequested</c> 回调 → 拷字节 → <see cref="BleGattInbox"/> → 上层拉取；</item>
-/// <item>广播：连接可建立，ServiceData 携带 <c>DiscoveryPayload</c>（FR-03 的发现口径）。</item>
+/// <item>广播：可连接广播 + 服务 UUID（v1.4：Legacy 广播 31 B 装不下 ServiceData，
+/// 发现只靠 UUID；竞选键由对端连接后从 META 特征值读取）。</item>
 /// </list>
 ///
 /// 本类不含重连逻辑（T3.3），也不含环境自检（T3.4）。链路断了就断，
@@ -138,7 +138,7 @@ public sealed class BleGattPeripheralChannel : IByteChannel
                 "本机适配器不支持 BLE 外设角色，无法作为被连接方。");
         }
 
-        await EnsureRadioOnAsync(adapter, log, cancellationToken).ConfigureAwait(false);
+        await BleGattEnvironment.EnsureRadioOnAsync(adapter, log, cancellationToken).ConfigureAwait(false);
 
         // ---------- 2. 注册服务 ----------
         var createResult = await GattServiceProvider
@@ -604,32 +604,6 @@ public sealed class BleGattPeripheralChannel : IByteChannel
     // 辅助
     // ------------------------------------------------------------------
 
-    private static async Task EnsureRadioOnAsync(
-        BluetoothAdapter adapter,
-        Action<string>? log,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            var radio = await adapter.GetRadioAsync().AsTask(cancellationToken).ConfigureAwait(false);
-            if (radio.State != RadioState.On)
-            {
-                throw new BleGattStartupException(BleGattFailureReason.BluetoothOff,
-                    "蓝牙未开启。请打开蓝牙开关后重试。");
-            }
-        }
-        catch (BleGattStartupException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            // 未打包的桌面进程可能无权查询 Radio。这不该阻断启动：
-            // 真正的失败会在 CreateAsync / StartAdvertising 里以明确的方式暴露出来。
-            log?.Invoke($"Radio 状态查询失败（不阻断，继续尝试）：{ex.GetType().Name}");
-        }
-    }
-
     private static IBuffer ToBuffer(ReadOnlySpan<byte> bytes)
     {
         using var writer = new DataWriter();
@@ -676,7 +650,7 @@ public sealed record BleGattPeripheralOptions
     }
 }
 
-/// <summary>外设通道启动失败的分类。给 T3.4 做用户可读提示用。</summary>
+/// <summary>通道启动失败的分类。给 T3.4 做用户可读提示用（外设/中心共用）。</summary>
 public enum BleGattFailureReason
 {
     /// <summary>没有蓝牙适配器，或适配器不支持 BLE。</summary>
@@ -688,14 +662,29 @@ public enum BleGattFailureReason
     /// <summary>本机适配器不支持外设角色 —— 这是能力缺失，应写入能力档案。</summary>
     PeripheralRoleUnsupported,
 
+    /// <summary>本机适配器不支持中心角色（能广播不能主动连）。</summary>
+    CentralRoleUnsupported,
+
     /// <summary>GATT 服务或特征值注册失败。</summary>
     ServiceRegistrationFailed,
 
     /// <summary>广播启动失败。</summary>
     AdvertisingFailed,
+
+    /// <summary>扫描失败或超时，没有发现离信外设（中心侧）。</summary>
+    DiscoveryFailed,
+
+    /// <summary>连接失败：地址不可达、无法建立 GATT 会话等（中心侧）。</summary>
+    ConnectionFailed,
+
+    /// <summary>服务/特征值发现失败：对端没有完整的 TX/RX（中心侧）。</summary>
+    ServiceDiscoveryFailed,
+
+    /// <summary>订阅通知失败：CCCD 写入未成功（中心侧）。</summary>
+    SubscribeFailed,
 }
 
-/// <summary>外设通道启动失败。</summary>
+/// <summary>通道启动失败。外设/中心共用，<see cref="Reason"/> 区分具体环节。</summary>
 public sealed class BleGattStartupException : Exception
 {
     /// <summary>创建一个启动失败异常。</summary>
