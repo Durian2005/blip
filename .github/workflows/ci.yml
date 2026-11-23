@@ -1,0 +1,36 @@
+# CI（A1/L5）：build 0 警告 + format 零偏差 + 全部测试
+# 注意：本文件推送后才真正生效——本地写好 ≠ CI 跑起来（铁律 1：push 须用户同意）。
+# 跑在 Windows 上：仓库 TFM 是 net9.0-windows10.0.19041.0，WinRT 投影只在 Windows 构建。
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restore
+        run: dotnet restore
+
+      # csproj 已 TreatWarningsAsErrors——0 警告由构建本身保证，无需额外开关
+      - name: Build (warnings are errors)
+        run: dotnet build --no-restore -c Debug
+
+      - name: Format zero-deviation check
+        run: dotnet format --verify-no-changes
+
+      # 覆盖率数据照 NFR-09 的口径收集（coverlet.collector 已在测试工程引用）
+      - name: Test (with coverage)
+        run: dotnet test --no-build --collect:"XPlat Code Coverage"
