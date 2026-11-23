@@ -42,6 +42,7 @@ btsnoop*.log
 *.snk
 secrets.json
 *.key
+scripts/scan-patterns.local.txt
 
 # ---- OS / editor ----
 Thumbs.db

@@ -1,0 +1,11 @@
+# 个人模式清单模板 —— 复制为 scan-patterns.local.txt 后填写，**local.txt 已被 .gitignore 忽略，绝不提交**
+# 每行一个 ERE 正则；# 开头为注释；空行跳过；行尾 CRLF 兼容。
+#
+# 该文件承载"脱敏三查"的第 3 查：通用正则（MAC / IPv4 / 路径 / 私钥 / 凭据）在
+# scripts/scan-secrets.sh 里随仓库分发，只有真名、用户名、设备型号这类
+# "写进脚本本身就会泄露"的字符串放这里。
+#
+# 示例（替换成你自己的）：
+# 张三
+# my-laptop
+# AirPods Pro
