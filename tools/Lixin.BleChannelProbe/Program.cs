@@ -16,15 +16,16 @@ namespace Lixin.BleChannelProbe;
 ///
 /// 用法：
 /// <code>
-///   BleChannelProbe              交互模式（默认，连上后自动跑一遍测试）
+///   BleChannelProbe              外设模式（默认，连上后自动跑一遍测试）
 ///   BleChannelProbe --no-auto    只等连接，所有测试手动触发
 ///   BleChannelProbe --wait 120   限时 120 秒后自动退出
+///   BleChannelProbe --central    中心模式（手机当外设，见 CentralMode）
 /// </code>
 ///
 /// 交互键：<c>2</c> 发 4 KB / <c>3</c> 发 32 KB / <c>s</c> 打统计 / <c>q</c> 退出。
 ///
-/// 验收判据见 <c>docs/design-t3.1-gatt-channel.md</c> §8，本工具负责 1/2/3/4/6/7 项
-/// （第 5 项需要手机当外设，由 <c>BleGattCentralChannel</c> 那侧验）。
+/// 验收判据见 <c>docs/design-t3.1-gatt-channel.md</c> §8：外设模式负责 1/2/3/4/6/7 项，
+/// 第 5 项（电脑当中心）由 <c>--central</c> 验。
 /// </summary>
 internal static class Program
 {
@@ -78,6 +79,11 @@ internal static class Program
 
     private static async Task<int> RunAsync(string[] args)
     {
+        if (args.Contains("--central"))
+        {
+            return await CentralMode.RunAsync(args);
+        }
+
         var autoRun = !args.Contains("--no-auto");
         var waitSeconds = ParseWaitSeconds(args);
 
@@ -451,5 +457,5 @@ internal static class Program
         return null;
     }
 
-    private static void Log(string message) => Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] {message}");
+    internal static void Log(string message) => Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] {message}");
 }
