@@ -710,6 +710,12 @@ public sealed class BleGattStartupException : Exception
     public BleGattFailureReason Reason { get; }
 
     /// <summary>
+    /// 可直接唤起的系统设置页 URI（T3.4）。目前只有「蓝牙开关关着」会填
+    /// <c>ms-settings:bluetooth</c>；其余失败原因没有对应的设置页，为 null。
+    /// </summary>
+    public string? SettingsUri { get; init; }
+
+    /// <summary>
     /// 是否应当写入能力档案。
     /// </summary>
     /// <remarks>

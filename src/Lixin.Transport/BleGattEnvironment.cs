@@ -26,7 +26,11 @@ internal static class BleGattEnvironment
             if (radio.State != RadioState.On)
             {
                 throw new BleGattStartupException(BleGattFailureReason.BluetoothOff,
-                    "蓝牙未开启。请打开蓝牙开关后重试。");
+                    "蓝牙未开启。请打开蓝牙开关后重试。")
+                {
+                    // T3.4：UI 层拿这个 URI 可以直接唤起系统蓝牙设置页
+                    SettingsUri = "ms-settings:bluetooth",
+                };
             }
         }
         catch (BleGattStartupException)
