@@ -107,6 +107,16 @@ public sealed class BleGattPeripheralChannel : IByteChannel
     public event EventHandler? ClientDisconnected;
 
     /// <summary>
+    /// 判定「中心已连上并订阅」时触发（订阅者 0 → &gt;0）。
+    /// </summary>
+    /// <remarks>
+    /// 与 <see cref="ClientDisconnected"/> 对称。外设侧的「链路已建立」就是这个时刻——
+    /// T3.3 的监督者工厂靠它区分「广播已启动」与「链路可用」：广播只是待命，
+    /// 首个订阅者出现才算连接成功。
+    /// </remarks>
+    public event EventHandler? ClientConnected;
+
+    /// <summary>
     /// 启动外设侧：检查适配器能力 → 注册服务与特征值 → 开始可连接广播。
     /// </summary>
     /// <exception cref="BleGattStartupException">
@@ -546,6 +556,10 @@ public sealed class BleGattPeripheralChannel : IByteChannel
         if (count > 0)
         {
             _log?.Invoke($"中心已订阅通知：{count} 个客户端（可以开始发送）");
+            if (previous == 0)
+            {
+                ClientConnected?.Invoke(this, EventArgs.Empty);
+            }
         }
         else
         {
